@@ -101,11 +101,11 @@ cd backend
 go mod tidy
 
 # 创建配置文件(复制示例配置)
-cp config/config.example.yml config/config.local.yml
-# 修改 config.local.yml 中的数据库和Redis配置
+cp configs/config.example.yml configs/config.yml
+# 修改 configs/config.yml 中的数据库和Redis配置
 
 # 运行(开发模式)
-go run main.go
+go run cmd/server/main.go
 
 # 或使用热重载(推荐)
 go install github.com/air-verse/air@latest
@@ -113,6 +113,8 @@ air
 
 # 后端将运行在 http://localhost:8080
 ```
+
+**注意**: 新的目录结构已采用 **miniblog 企业级架构**,详见 `backend/ARCHITECTURE.md`
 
 ### 4. 前端启动
 
