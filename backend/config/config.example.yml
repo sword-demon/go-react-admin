@@ -1,0 +1,15 @@
+server:
+  port: 8080
+
+database:
+  host: localhost
+  port: 3306
+  username: xxx
+  password: xxx
+  name: go_react_admin
+
+redis:
+  host: localhost
+  port: 6379
+  password: ""
+  db: 0

@@ -1,0 +1,278 @@
+# =====================================================
+# Go-React-Admin .gitignore
+# 项目: 企业级权限管理系统
+# 技术栈: Go + React + MySQL + Redis
+# =====================================================
+
+# =====================================================
+# Go Backend
+# =====================================================
+
+# 二进制文件
+backend/bin/
+backend/*.exe
+backend/*.exe~
+backend/*.dll
+backend/*.so
+backend/*.dylib
+backend/main
+backend/server
+
+# Go测试文件
+backend/*.test
+backend/*.out
+backend/coverage.txt
+backend/coverage.html
+
+# Go依赖
+backend/vendor/
+
+# Go工作区文件
+backend/go.work
+backend/go.work.sum
+
+# 环境配置文件(敏感信息!)
+backend/.env
+backend/.env.local
+backend/.env.*.local
+backend/config/config.local.yml
+backend/config/config.prod.yml
+
+# 日志文件
+backend/logs/
+backend/*.log
+
+# 临时文件
+backend/tmp/
+backend/.tmp/
+backend/*.tmp
+backend/*.swp
+backend/*.swo
+backend/*~
+
+# Air热重载配置(如果自定义)
+backend/.air.toml
+
+# IDE配置
+backend/.vscode/
+backend/.idea/
+backend/*.iml
+
+# =====================================================
+# React Frontend
+# =====================================================
+
+# 依赖
+react-admin/node_modules/
+react-admin/.pnp
+react-admin/.pnp.js
+
+# 生产构建
+react-admin/dist/
+react-admin/build/
+
+# 测试覆盖率
+react-admin/coverage/
+
+# 环境变量文件
+react-admin/.env
+react-admin/.env.local
+react-admin/.env.development.local
+react-admin/.env.test.local
+react-admin/.env.production.local
+
+# 日志
+react-admin/npm-debug.log*
+react-admin/yarn-debug.log*
+react-admin/yarn-error.log*
+react-admin/pnpm-debug.log*
+react-admin/lerna-debug.log*
+
+# 编辑器配置
+react-admin/.vscode/*
+!react-admin/.vscode/extensions.json
+react-admin/.idea/
+react-admin/*.suo
+react-admin/*.ntvs*
+react-admin/*.njsproj
+react-admin/*.sln
+react-admin/*.sw?
+
+# Vite缓存
+react-admin/.vite/
+
+# TypeScript缓存
+react-admin/*.tsbuildinfo
+
+# =====================================================
+# 数据库
+# =====================================================
+
+# 数据库备份文件
+*.sql.bak
+*.sql.backup
+db_backup/
+database_dumps/
+
+# MySQL/MariaDB
+*.MYD
+*.MYI
+*.ibd
+*.frm
+
+# SQLite
+*.db
+*.sqlite
+*.sqlite3
+
+# =====================================================
+# Redis
+# =====================================================
+
+# Redis持久化文件
+*.rdb
+*.aof
+dump.rdb
+
+# =====================================================
+# 系统文件
+# =====================================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+
+# =====================================================
+# IDE / 编辑器
+# =====================================================
+
+# VSCode
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+# JetBrains IDEs (GoLand, WebStorm, etc.)
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+[._]*.s[a-v][a-z]
+[._]*.sw[a-p]
+[._]s[a-rt-v][a-z]
+[._]ss[a-gi-z]
+[._]sw[a-p]
+Session.vim
+Sessionx.vim
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# =====================================================
+# 项目特定文件
+# =====================================================
+
+# 敏感配置文件(JWT密钥/数据库密码等)
+config.local.yml
+secrets.yml
+.secrets
+
+# 临时上传文件
+uploads/
+temp/
+tmp/
+
+# 导出文件
+exports/
+*.xlsx
+*.xls
+*.csv
+
+# 证书和密钥
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# Docker相关(如果用Docker)
+docker-compose.override.yml
+.dockerignore
+
+# 本地开发脚本
+dev.sh
+local.sh
+
+# =====================================================
+# 测试和CI/CD
+# =====================================================
+
+# 测试生成的文件
+test_reports/
+junit.xml
+
+# CI/CD临时文件
+.gitlab-ci-local/
+.github-actions-local/
+
+# =====================================================
+# 其他
+# =====================================================
+
+# 压缩文件
+*.zip
+*.tar
+*.tar.gz
+*.rar
+*.7z
+
+# 备份文件
+*.bak
+*.backup
+*.old
+
+# Patch文件
+*.orig
+*.rej
+*.patch
+
+# =====================================================
+# 重要提醒
+# =====================================================
+# 1. 永远不要提交敏感信息(密码/密钥/Token)!
+# 2. 使用环境变量管理配置
+# 3. 提交前检查: git status
+# 4. 如果不小心提交了敏感信息,立即用 git filter-branch 删除!
+# =====================================================
