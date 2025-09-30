@@ -158,6 +158,58 @@ func (b *permissionBiz) GetCacheStats() cache.CacheStats {
 	return b.localCache.Stats()
 }
 
+// LoadUserPermissions implements cache.PermissionLoader interface
+// Used by cache warmup to preload user permissions
+func (b *permissionBiz) LoadUserPermissions(ctx context.Context, userID uint64) ([]string, error) {
+	return b.GetUserPermissions(ctx, userID)
+}
+
+// LoadRolePermissions implements cache.PermissionLoader interface
+// Used by cache warmup to preload role permissions
+func (b *permissionBiz) LoadRolePermissions(ctx context.Context, roleID uint64) ([]string, error) {
+	cacheKey := cache.RolePermissionCacheKey(roleID)
+
+	// Try local cache first
+	if val, ok := b.localCache.Get(cacheKey); ok {
+		if permissions, ok := val.([]string); ok {
+			return permissions, nil
+		}
+	}
+
+	// Try Redis
+	if b.redis != nil {
+		data, err := b.redis.Get(ctx, cacheKey)
+		if err == nil {
+			var permissions []string
+			if err := json.Unmarshal([]byte(data), &permissions); err == nil {
+				b.localCache.SetWithTTL(cacheKey, permissions, 5*time.Minute)
+				return permissions, nil
+			}
+		}
+	}
+
+	// Load from database
+	rolePerms, err := b.store.Permissions().GetRolePermissions(ctx, roleID)
+	if err != nil {
+		return nil, errors.Wrap(errors.ErrInternalServer, "failed to get role permissions", err)
+	}
+
+	// Extract permission patterns
+	permissions := make([]string, 0, len(rolePerms))
+	for _, rp := range rolePerms {
+		permissions = append(permissions, rp.Permission)
+	}
+
+	// Backfill cache
+	if b.redis != nil {
+		data, _ := json.Marshal(permissions)
+		_ = b.redis.Set(ctx, cacheKey, data, 30*time.Minute)
+	}
+	b.localCache.SetWithTTL(cacheKey, permissions, 5*time.Minute)
+
+	return permissions, nil
+}
+
 // matchPermission checks if pattern matches any user permission
 func matchPermission(userPermissions []string, requestPattern string) bool {
 	for _, userPerm := range userPermissions {
