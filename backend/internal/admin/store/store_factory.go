@@ -1,6 +1,8 @@
 package store
 
 import (
+	"context"
+
 	"gorm.io/gorm"
 )
 
@@ -37,6 +39,26 @@ func (ds *datastore) Menus() IMenuStore {
 // Permissions returns permission store
 func (ds *datastore) Permissions() IPermissionStore {
 	return newPermissionStore(ds.db)
+}
+
+// Transaction executes a function within a database transaction
+// Usage example:
+//
+//	err := store.Transaction(ctx, func(txStore IStore) error {
+//	    if err := txStore.Users().Create(ctx, user); err != nil {
+//	        return err
+//	    }
+//	    if err := txStore.Roles().AssignRoles(ctx, user.ID, roleIDs); err != nil {
+//	        return err
+//	    }
+//	    return nil
+//	})
+func (ds *datastore) Transaction(ctx context.Context, fn func(IStore) error) error {
+	return ds.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Create a new store instance with the transaction DB
+		txStore := NewStore(tx)
+		return fn(txStore)
+	})
 }
 
 // Close closes database connection

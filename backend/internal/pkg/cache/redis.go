@@ -3,6 +3,7 @@ package cache
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"time"
@@ -111,4 +112,39 @@ func (c *RedisClient) Keys(ctx context.Context, pattern string) ([]string, error
 // FlushDB clears current database (use carefully!)
 func (c *RedisClient) FlushDB(ctx context.Context) error {
 	return c.Client.FlushDB(ctx).Err()
+}
+
+// SetJSON stores a Go object as JSON string
+func (c *RedisClient) SetJSON(ctx context.Context, key string, value interface{}, expiration time.Duration) error {
+	data, err := json.Marshal(value)
+	if err != nil {
+		return fmt.Errorf("failed to marshal JSON: %w", err)
+	}
+	return c.Set(ctx, key, data, expiration)
+}
+
+// GetJSON retrieves a JSON string and unmarshals into target
+// target must be a pointer
+func (c *RedisClient) GetJSON(ctx context.Context, key string, target interface{}) error {
+	data, err := c.Get(ctx, key)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal([]byte(data), target)
+}
+
+// DeleteByPrefix deletes all keys matching the prefix pattern
+// Returns the number of keys deleted
+func (c *RedisClient) DeleteByPrefix(ctx context.Context, prefix string) (int, error) {
+	keys, err := c.Keys(ctx, prefix+"*")
+	if err != nil {
+		return 0, err
+	}
+	if len(keys) == 0 {
+		return 0, nil
+	}
+	if err := c.Del(ctx, keys...); err != nil {
+		return 0, err
+	}
+	return len(keys), nil
 }

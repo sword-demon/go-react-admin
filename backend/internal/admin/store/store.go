@@ -14,6 +14,12 @@ type IStore interface {
 	Depts() IDeptStore
 	Menus() IMenuStore
 	Permissions() IPermissionStore
+
+	// Transaction executes a function within a database transaction
+	// If the function returns an error, the transaction is rolled back
+	// Otherwise, the transaction is committed
+	Transaction(ctx context.Context, fn func(IStore) error) error
+
 	Close() error
 }
 

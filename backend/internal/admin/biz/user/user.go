@@ -2,10 +2,10 @@ package user
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/sword-demon/go-react-admin/internal/admin/store"
 	"github.com/sword-demon/go-react-admin/internal/pkg/cache"
+	"github.com/sword-demon/go-react-admin/internal/pkg/errors"
 	"github.com/sword-demon/go-react-admin/internal/pkg/model"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -83,22 +83,22 @@ func NewUserBiz(store store.IStore, cache *cache.RedisClient) IUserBiz {
 
 // Create creates a new user with hashed password
 func (b *userBiz) Create(ctx context.Context, req *CreateUserRequest) (*UserResponse, error) {
-	// Check if username exists
+	// 1. Business validation: check if username exists
 	_, err := b.store.Users().GetByUsername(ctx, req.Username)
 	if err == nil {
-		return nil, fmt.Errorf("username already exists")
+		return nil, errors.ErrUsernameExists
 	}
 	if err != gorm.ErrRecordNotFound {
-		return nil, err
+		return nil, errors.Wrap(errors.ErrInternalServer, "failed to check username", err)
 	}
 
-	// Hash password
+	// 2. Hash password (business logic)
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
-		return nil, fmt.Errorf("failed to hash password: %w", err)
+		return nil, errors.Wrap(errors.ErrInternalServer, "failed to hash password", err)
 	}
 
-	// Create user model
+	// 3. Build domain model
 	user := &model.User{
 		Username: req.Username,
 		Password: string(hashedPassword),
@@ -109,9 +109,9 @@ func (b *userBiz) Create(ctx context.Context, req *CreateUserRequest) (*UserResp
 		Status:   model.StatusEnabled,
 	}
 
-	// Save to database
+	// 4. Persist to database
 	if err := b.store.Users().Create(ctx, user); err != nil {
-		return nil, err
+		return nil, errors.Wrap(errors.ErrInternalServer, "failed to create user", err)
 	}
 
 	return b.toUserResponse(user), nil
@@ -119,13 +119,21 @@ func (b *userBiz) Create(ctx context.Context, req *CreateUserRequest) (*UserResp
 
 // Update updates user information
 func (b *userBiz) Update(ctx context.Context, id uint64, req *UpdateUserRequest) error {
-	// Get existing user
+	// 1. Check if user exists
 	user, err := b.store.Users().Get(ctx, id)
 	if err != nil {
-		return err
+		if err == gorm.ErrRecordNotFound {
+			return errors.ErrUserNotFoundError
+		}
+		return errors.Wrap(errors.ErrInternalServer, "failed to get user", err)
 	}
 
-	// Update fields
+	// 2. Business validation: status check
+	if req.Status < 0 || req.Status > 1 {
+		return errors.New(errors.ErrUserInvalidStatus, "status must be 0 or 1")
+	}
+
+	// 3. Update fields
 	if req.NickName != "" {
 		user.NickName = req.NickName
 	}
@@ -142,24 +150,59 @@ func (b *userBiz) Update(ctx context.Context, id uint64, req *UpdateUserRequest)
 		user.Status = uint8(req.Status)
 	}
 
-	return b.store.Users().Update(ctx, user)
+	// 4. Update in database
+	if err := b.store.Users().Update(ctx, user); err != nil {
+		return errors.Wrap(errors.ErrInternalServer, "failed to update user", err)
+	}
+
+	// 5. Invalidate cache (if cache is enabled)
+	if b.cache != nil {
+		// Clear user permission cache (affects permission checks)
+		cacheKey := fmt.Sprintf("user:permissions:%d", id)
+		_ = b.cache.Del(ctx, cacheKey)
+	}
+
+	return nil
 }
 
 // Delete soft deletes a user
 func (b *userBiz) Delete(ctx context.Context, id uint64) error {
-	// Check if user exists
+	// 1. Check if user exists
 	if _, err := b.store.Users().Get(ctx, id); err != nil {
-		return err
+		if err == gorm.ErrRecordNotFound {
+			return errors.ErrUserNotFoundError
+		}
+		return errors.Wrap(errors.ErrInternalServer, "failed to get user", err)
 	}
 
-	return b.store.Users().Delete(ctx, id)
+	// 2. Business rule: prevent deleting super admin (id=1)
+	if id == 1 {
+		return errors.New(errors.ErrForbidden, "cannot delete super admin")
+	}
+
+	// 3. Soft delete
+	if err := b.store.Users().Delete(ctx, id); err != nil {
+		return errors.Wrap(errors.ErrInternalServer, "failed to delete user", err)
+	}
+
+	// 4. Invalidate cache
+	if b.cache != nil {
+		// Clear user permission cache
+		cacheKey := fmt.Sprintf("user:permissions:%d", id)
+		_ = b.cache.Del(ctx, cacheKey)
+	}
+
+	return nil
 }
 
 // Get retrieves user by ID
 func (b *userBiz) Get(ctx context.Context, id uint64) (*UserResponse, error) {
 	user, err := b.store.Users().Get(ctx, id)
 	if err != nil {
-		return nil, err
+		if err == gorm.ErrRecordNotFound {
+			return nil, errors.ErrUserNotFoundError
+		}
+		return nil, errors.Wrap(errors.ErrInternalServer, "failed to get user", err)
 	}
 	return b.toUserResponse(user), nil
 }
@@ -191,7 +234,7 @@ func (b *userBiz) List(ctx context.Context, req *ListUserRequest) (*ListUserResp
 	// Query users
 	users, total, err := b.store.Users().List(ctx, opts)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(errors.ErrInternalServer, "failed to list users", err)
 	}
 
 	// Convert to responses
@@ -208,36 +251,77 @@ func (b *userBiz) List(ctx context.Context, req *ListUserRequest) (*ListUserResp
 
 // ChangePassword changes user password
 func (b *userBiz) ChangePassword(ctx context.Context, id uint64, req *ChangePasswordRequest) error {
-	// Get user
+	// 1. Get user
 	user, err := b.store.Users().Get(ctx, id)
 	if err != nil {
-		return err
+		if err == gorm.ErrRecordNotFound {
+			return errors.ErrUserNotFoundError
+		}
+		return errors.Wrap(errors.ErrInternalServer, "failed to get user", err)
 	}
 
-	// Verify old password
+	// 2. Verify old password
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.OldPassword)); err != nil {
-		return fmt.Errorf("old password is incorrect")
+		return errors.ErrInvalidOldPassword
 	}
 
-	// Hash new password
+	// 3. Business validation: new password strength
+	if len(req.NewPassword) < 6 {
+		return errors.New(errors.ErrInvalidParams, "password must be at least 6 characters")
+	}
+
+	// 4. Hash new password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
 	if err != nil {
-		return fmt.Errorf("failed to hash password: %w", err)
+		return errors.Wrap(errors.ErrInternalServer, "failed to hash password", err)
 	}
 
-	// Update password
+	// 5. Update password
 	user.Password = string(hashedPassword)
-	return b.store.Users().Update(ctx, user)
+	if err := b.store.Users().Update(ctx, user); err != nil {
+		return errors.Wrap(errors.ErrInternalServer, "failed to update password", err)
+	}
+
+	return nil
 }
 
-// AssignRoles assigns roles to user
+// AssignRoles assigns roles to user (with transaction support)
 func (b *userBiz) AssignRoles(ctx context.Context, userID uint64, roleIDs []uint64) error {
-	// Check if user exists
-	if _, err := b.store.Users().Get(ctx, userID); err != nil {
-		return err
-	}
+	// Use transaction to ensure atomicity
+	return b.store.Transaction(ctx, func(txStore store.IStore) error {
+		// 1. Check if user exists
+		if _, err := txStore.Users().Get(ctx, userID); err != nil {
+			if err == gorm.ErrRecordNotFound {
+				return errors.ErrUserNotFoundError
+			}
+			return errors.Wrap(errors.ErrInternalServer, "failed to get user", err)
+		}
 
-	return b.store.Users().AssignRoles(ctx, userID, roleIDs)
+		// 2. Validate role IDs (business rule: check if roles exist)
+		for _, roleID := range roleIDs {
+			if _, err := txStore.Roles().Get(ctx, roleID); err != nil {
+				if err == gorm.ErrRecordNotFound {
+					return errors.Wrap(errors.ErrRoleNotFound, "role not found", err)
+				}
+				return errors.Wrap(errors.ErrInternalServer, "failed to get role", err)
+			}
+		}
+
+		// 3. Assign roles (within transaction)
+		if err := txStore.Users().AssignRoles(ctx, userID, roleIDs); err != nil {
+			return errors.Wrap(errors.ErrInternalServer, "failed to assign roles", err)
+		}
+
+		// 4. Clear user permission cache (roles changed = permissions changed)
+		if b.cache != nil {
+			cacheKey := fmt.Sprintf("user:permissions:%d", userID)
+			_ = b.cache.Del(ctx, cacheKey)
+		}
+
+		return nil
+	})
+
+	// NOTE: If any step fails, the transaction will be rolled back automatically
 }
 
 // toUserResponse converts model to response
